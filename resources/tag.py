@@ -6,20 +6,29 @@ from db import db
 from models import TagModel, StoreModel, ItemModel
 from schemas import TagSchema, TagAndItemSchema
 
+from flask_jwt_extended import get_jwt_identity, jwt_required
+
 blp = Blueprint("Tags", "tags", description="Operations on tags")
 
 
 @blp.route("/store/<int:store_id>/tag")
 class TagsInStore(MethodView):
+    @jwt_required()
     @blp.response(200, TagSchema(many=True))
     def get(self, store_id):
         store = StoreModel.query.get_or_404(store_id)
 
         return store.tags.all()  # lazy="dynamic" means 'tags' is a query
 
+    @jwt_required()
     @blp.arguments(TagSchema)
     @blp.response(201, TagSchema)
     def post(self, tag_data, store_id):
+        jwt = get_jwt_identity()
+
+        if not jwt.get("is_admin"):
+            abort(401, message="Admin privilege required")
+
         if TagModel.query.filter(TagModel.store_id == store_id, TagModel.name == tag_data["name"]).first():
             abort(400, message="A tag with that name already exists in that store.")
 
@@ -38,8 +47,14 @@ class TagsInStore(MethodView):
 
 @blp.route("/item/<int:item_id>/tag/<int:tag_id>")
 class LinkTagsToItem(MethodView):
+    @jwt_required()
     @blp.response(201, TagSchema)
     def post(self, item_id, tag_id):
+        jwt = get_jwt_identity()
+
+        if not jwt.get("is_admin"):
+            abort(401, message="Admin privilege required")
+
         item = ItemModel.query.get_or_404(item_id)
         tag = TagModel.query.get_or_404(tag_id)
 
@@ -53,8 +68,14 @@ class LinkTagsToItem(MethodView):
 
         return tag
 
+    @jwt_required()
     @blp.response(200, TagAndItemSchema)
     def delete(self, item_id, tag_id):
+        jwt = get_jwt_identity()
+
+        if not jwt.get("is_admin"):
+            abort(401, message="Admin privilege required")
+
         item = ItemModel.query.get_or_404(item_id)
         tag = TagModel.query.get_or_404(tag_id)
 
@@ -71,11 +92,13 @@ class LinkTagsToItem(MethodView):
 
 @blp.route("/tag/<int:tag_id>")
 class Tag(MethodView):
+    @jwt_required()
     @blp.response(200, TagSchema)
     def get(self, tag_id):
         tag = TagModel.query.get_or_404(tag_id)
         return tag
 
+    @jwt_required()
     @blp.response(
         202,
         description="Deletes a tag if no item is tagged with it.",
@@ -87,6 +110,11 @@ class Tag(MethodView):
         description="Returned if the tag is assigned to one or more items. In this case, the tag is not deleted.",
     )
     def delete(self, tag_id):
+        jwt = get_jwt_identity()
+
+        if not jwt.get("is_admin"):
+            abort(401, message="Admin privilege required")
+
         tag = TagModel.query.get_or_404(tag_id)
 
         if not tag.items:

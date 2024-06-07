@@ -14,3 +14,4 @@ class ItemModel(db.Model):
     tags = db.relationship(
         "TagModel", secondary="items_tags", back_populates="items"
     )
+    

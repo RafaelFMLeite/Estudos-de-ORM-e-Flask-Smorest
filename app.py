@@ -2,6 +2,7 @@ from flask import Flask, jsonify
 from flask_smorest import Api
 from flask_jwt_extended import JWTManager
 import secrets
+from blocklist import BLOCKLIST
 
 import models
 
@@ -31,11 +32,34 @@ def create_app(db_url=None):
     app.config["JWT_SECRET_KEY"] = str(secrets.SystemRandom().getrandbits(128))
     jwt = JWTManager(app)
 
+    @jwt.needs_fresh_token_loader
+    def token_not_fresh_callback(jwt_headers, jwt_data):
+        return (
+            jsonify(
+                {
+                    "description": "The token is not fresh.",
+                    "error": "fresh_token_required",
+                }
+            ),
+            401,
+        )
+    
+    @jwt.token_in_blocklist_loader
+    def check_if_token_in_blocklist(jwt_headers, jwt_data):
+        return jwt_data["jti"] in BLOCKLIST
+
     @jwt.additional_claims_loader
     def add_claims_to_jwt(identity):
         if identity == 1:
             return {"is_admin": True}
         return {"is_admin": False}
+
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_headers, jwt_data):
+        return (
+            jsonify({"description": "The token has been revoked.", "error": "token_revoked"}),
+            401,
+        )
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_headers, jwt_data):

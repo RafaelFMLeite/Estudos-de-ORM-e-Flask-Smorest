@@ -1,17 +1,15 @@
+import models
+import secrets
 from flask import Flask, jsonify
 from flask_smorest import Api
 from flask_jwt_extended import JWTManager
-import secrets
 from blocklist import BLOCKLIST
-
-import models
-
+from flask_migrate import Migrate
 from db import db
 from resources.item import blp as ItemBlueprint
 from resources.store import blp as StoreBlueprint
 from resources.tag import blp as TagBlueprint
 from resources.user import blp as UserBlueprint
-
 
 def create_app(db_url=None):
     app = Flask(__name__)
@@ -30,7 +28,9 @@ def create_app(db_url=None):
     api = Api(app)
 
     app.config["JWT_SECRET_KEY"] = str(secrets.SystemRandom().getrandbits(128))
+    
     jwt = JWTManager(app)
+    migrate = Migrate(app, db)
 
     @jwt.needs_fresh_token_loader
     def token_not_fresh_callback(jwt_headers, jwt_data):
@@ -82,9 +82,6 @@ def create_app(db_url=None):
             jsonify({"description": "Request does not contain an access token.", "error": "authorization_required"}),
             401,
         )
-
-    with app.app_context():
-        db.create_all()
 
     api.register_blueprint(ItemBlueprint)
     api.register_blueprint(StoreBlueprint)
